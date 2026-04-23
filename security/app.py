@@ -18,7 +18,7 @@ st.set_page_config(
 
 # OpenRouter Configuration
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or st.secrets.get("OPENROUTER_API_KEY")
 DEFAULT_MODEL = "openrouter/free"  # Simple free model
 
 if not OPENROUTER_API_KEY:
