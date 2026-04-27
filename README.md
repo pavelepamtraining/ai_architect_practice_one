@@ -50,3 +50,5 @@ source venv/bin/activate
 ```bash
 jupyter notebook ReAct.ipynb
 ```
+
+https://docs.google.com/document/d/1nNgQ5SLR58f3sd3Wxbkorgpk9UUeB92qw3nbQyAZgdY/edit?usp=sharing
