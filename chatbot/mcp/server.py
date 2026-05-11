@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+import logging
 
 import requests
 import feedparser
 
 from pydantic import BaseModel, Field
+from mcp.disaster_service import DisasterDataService
+
+logger = logging.getLogger(__name__)
 
 class ToolSchema(BaseModel):
     """Strict tool schema following MCP specification."""
@@ -64,7 +68,7 @@ class MCPServer(ABC):
             return ToolResult(success=True, data=result)
 
         except Exception as e:
-            print(f"Tool execution failed: {name}", exc_info=True)
+            logger.exception(f"Tool execution failed: {name}", exc_info=True)
             return ToolResult(success=False, error=str(e))
 
     def _add_tool(self, schema: ToolSchema) -> None:
@@ -93,6 +97,9 @@ class MCPServerImpl(MCPServer):
     }
 
     def __init__(self):
+        self.disaster_service = DisasterDataService(
+            csv_path="data/disasters.csv"
+        )
         super().__init__("unified")
 
     def _register_tools(self) -> None:
@@ -130,6 +137,26 @@ class MCPServerImpl(MCPServer):
                     }
                 },
                 "required": ["category"]
+            }
+        ))
+
+        self._add_tool(ToolSchema(
+            name="query_disaster_data",
+            description=(
+                "Query historical natural disaster information "
+                "from structured CSV dataset."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Natural language disaster query"
+                        )
+                    }
+                },
+                "required": ["query"]
             }
         ))
 
@@ -251,3 +278,15 @@ class MCPServerImpl(MCPServer):
             "articles": articles,
             "retrieved_at": datetime.now().isoformat()
         }
+
+    # ========== Disaster Data Tool Implementation ==========
+
+    def _execute_query_disaster_data(
+        self,
+        arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Implementation of disaster retrieval tool."""
+
+        query = arguments["query"]
+
+        return self.disaster_service.query(query)
