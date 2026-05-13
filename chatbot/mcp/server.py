@@ -12,6 +12,7 @@ from rag.retriever import RAGRetriever
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+base_dir = Path(__file__).resolve().parent.parent
 
 class ToolSchema(BaseModel):
     """Strict tool schema following MCP specification."""
@@ -99,8 +100,6 @@ class MCPServerImpl(MCPServer):
     }
 
     def __init__(self):
-        base_dir = Path(__file__).resolve().parent.parent
-
         csv_path = (
             base_dir / "data" / "disasters.csv"
         )
@@ -108,9 +107,23 @@ class MCPServerImpl(MCPServer):
         self.disaster_service = DisasterDataService(
             csv_path=str(csv_path)
         )
+        index_path = (
+            base_dir
+            / "rag"
+            / "vector_store"
+            / "index.faiss"
+        )
+
+        documents_path = (
+            base_dir
+            / "rag"
+            / "vector_store"
+            / "documents.pkl"
+        )
+
         self.rag_retriever = RAGRetriever(
-            index_path="rag/vector_store/index.faiss",
-            documents_path="rag/vector_store/documents.pkl"
+            index_path=str(index_path),
+            documents_path=str(documents_path)
         )
         super().__init__("unified")
 
