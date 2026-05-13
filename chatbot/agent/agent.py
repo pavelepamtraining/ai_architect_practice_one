@@ -291,7 +291,7 @@ IMPORTANT:
             content = data["choices"][0]["message"]["content"]
 
             if not content:
-                raise ValueError("Empty model response")
+                raise ValueError("We are experiencing temporary technical issues. Please try again.")
 
             return content
 
