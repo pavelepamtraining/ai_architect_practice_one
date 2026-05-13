@@ -12,6 +12,8 @@ from mcp.server import MCPServer, ToolSchema, ToolResult
 from memory.working_memory import WorkingMemory
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
+from dataclasses import dataclass
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,20 @@ class AgentState(TypedDict):
     messages: List[Dict[str, str]]
     tool_result: Optional[str]
     tool_call: Optional[Dict[str, Any]]
+    # ----------------------------------------------------
+    # Evaluation / observability fields
+    # ----------------------------------------------------
+    tools_used: List[str]
+    parsing_failed: bool
+    iteration_count: int
+
+@dataclass
+class AgentExecutionResult:
+    response: str
+    tools_used: list[str]
+    parsing_failed: bool
+    response_time: float
+    total_tool_calls: int
 
 class AgentOrchestrator:
     """Agent orchestrator with LLM-driven tool selection."""
@@ -80,12 +96,17 @@ INSTRUCTIONS:
    <TOOL_CALL>
    {{"name": "tool_name", "arguments": {{"param": "value"}}}}
    </TOOL_CALL>
+   Do not use XML.
+   Do not use pseudo-code.
+   Do not use natural language before or after tool calls.
 4. If you don't need a tool, or after receiving tool results, provide a natural language answer
 5. Be concise and accurate
 6. Do not hallucinate information - only use data from tool results
 
 IMPORTANT:
 - Output ONLY valid JSON inside <TOOL_CALL>
+- If the user asks about historical or conceptual information, prefer the retrieve_rag_context.
+- If the user asks for latest/current/recent events, prefer the get_latest_news.
 - Do NOT include any extra text inside TOOL_CALL
 - Ensure JSON is strictly valid (double quotes, no trailing commas)
 - Only make ONE tool call at a time
@@ -104,6 +125,17 @@ IMPORTANT:
                 json_str = response[start:end].strip()
 
                 data = json.loads(json_str)
+
+                if "arguments" not in data:
+                    arguments = {
+                        k: v
+                        for k, v in data.items()
+                        if k != "name"
+                    }
+                    data = {
+                        "name": data["name"],
+                        "arguments": arguments
+                    }
                 return ToolCall(**data)
 
             # Native tool call format
@@ -114,17 +146,21 @@ IMPORTANT:
                 tool_content = tool_content.strip("[]")
                 tool_name = tool_content.split("(")[0]
                 args_part = tool_content.split("(", 1)[1].rsplit(")", 1)[0]
-                arguments = {}
-                if "=" in args_part:
+                if args_part.startswith("{"):
+                    arguments = json.loads(args_part)
+                else:
+                    arguments = {}
                     key, value = args_part.split("=", 1)
                     arguments[key.strip()] = value.strip().strip("'").strip('"')
-                    return ToolCall(
-                        name=tool_name,
-                        arguments=arguments
-                    )
+
+                return ToolCall(
+                    name=tool_name,
+                    arguments=arguments
+                )
 
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
             logger.exception(f"Failed to parse tool call: {e}")
+            state["parsing_failed"] = True
 
         return None
 
@@ -153,6 +189,8 @@ IMPORTANT:
     def _reason_node(self, state: AgentState) -> AgentState:
 
         system_prompt = self._build_system_prompt()
+
+        state["iteration_count"] += 1
 
         messages = [
             {"role": "system", "content": system_prompt}
@@ -187,6 +225,10 @@ IMPORTANT:
     def _tool_node(self, state: AgentState) -> AgentState:
 
         tool_call_data = state.get("tool_call")
+
+        state["tools_used"].append(
+            tool_call.name
+        )
 
         if not tool_call_data:
             return state
@@ -267,10 +309,12 @@ IMPORTANT:
 
             data = response.json()
 
+            logger.info(f"LLM response: {json.dumps(data, indent=2)[:200]}...")
+
             content = data["choices"][0]["message"]["content"]
 
             if not content:
-                raise ValueError("Empty model response")
+                raise ValueError("We are experiencing temporary technical issues. Please try again.")
 
             return content
 
@@ -280,6 +324,8 @@ IMPORTANT:
 
     def process_query(self, query: str) -> str:
 
+        start = time.time()
+
         initial_state = AgentState(
             messages=[
                 {
@@ -288,12 +334,25 @@ IMPORTANT:
                 }
             ],
             tool_result=None,
-            tool_call=None
+            tool_call=None,
+            tools_used=[],
+            parsing_failed=False,
+            iteration_count=0
         )
 
         final_state = self.graph.invoke(initial_state)
 
-        return final_state["messages"][-1]["content"]
+        response_time = (time.time() - start)
+
+        return AgentExecutionResult(
+            response=final_state["messages"][-1]["content"],
+            tools_used=final_state["tools_used"],
+            parsing_failed=final_state["parsing_failed"],
+            response_time=response_time,
+            total_tool_calls=len(
+                final_state["tools_used"]
+            )
+        )
 
     def reset(self) -> None:
         """Reset agent state."""

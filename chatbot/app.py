@@ -2,6 +2,8 @@ import os
 import streamlit as st
 from agent.agent import AgentOrchestrator
 from mcp.server import MCPServerImpl
+from evaluation.evaluator import AgentEvaluator
+from evaluation.dataset import EVALUATION_DATASET
 
 
 import logging
@@ -35,11 +37,22 @@ def initialize_session_state() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-
 def render_sidebar() -> None:
     """Render sidebar UI."""
 
     with st.sidebar:
+
+        st.header("Navigation")
+
+        selected_page = st.radio(
+            label="Select Page",
+            options=[
+                "Chat",
+                "Evaluation Framework"
+            ]
+        )
+
+        st.markdown("---")
 
         st.header("Configuration")
 
@@ -47,15 +60,17 @@ def render_sidebar() -> None:
 ### Available MCP Tools
 
 #### 🌦 Weather Tool
-Examples:
-- Weather in London
-- Temperature in Tokyo
+Provides current weather conditions using Open-Meteo API.
 
-#### 📰 News Tool
-Examples:
-- Latest technology news
-- Business news
-- World news
+#### 📰 Live News Tool
+Retrieves latest news headlines from RSS feeds.
+
+#### 📚 BBC News Archive RAG Tool
+Performs semantic retrieval over embedded BBC news articles using FAISS vector search.
+
+#### 🌪️ Disaster Analytics Tool
+Queries historical natural disaster dataset using Pandas filtering and aggregation.
+
 """)
 
         st.markdown("---")
@@ -67,6 +82,8 @@ Examples:
             st.session_state.agent.reset()
 
             st.rerun()
+
+    return selected_page
 
 
 def render_chat_history() -> None:
@@ -100,11 +117,12 @@ def process_user_input(user_input: str) -> None:
 
             try:
 
-                response = st.session_state.agent.process_query(user_input)
+                result = (st.session_state.agent.process_query(user_input))
+
+                response = result.response
 
             except Exception as e:
-
-                response = f"ERROR: {str(e)}"
+                response = "We are experiencing temporary technical issues. Please try again."
 
             st.markdown(response)
 
@@ -114,6 +132,102 @@ def process_user_input(user_input: str) -> None:
         "content": response
     })
 
+def render_evaluation_tab() -> None:
+
+    st.header("Evaluation Framework")
+
+    st.markdown("""
+        Please note: this demo uses free-tier AI models and external services,
+        so responses may occasionally be slower than expected or temporarily unavailable due to provider/network limitations.
+    """)
+
+    st.subheader("Evaluation Dataset")
+
+    dataset_rows = []
+
+    for case in EVALUATION_DATASET:
+
+        dataset_rows.append({
+            "Scenario": case.name,
+            "Query": case.query,
+            "Expected Tools": ", ".join(
+                case.expected_tools
+            ),
+            "Multi Tool": case.requires_multi_tool
+        })
+
+    st.dataframe(
+        dataset_rows,
+        width="stretch"
+    )
+
+    if st.button("Run Evaluation"):
+
+        evaluator = AgentEvaluator(
+            st.session_state.agent
+        )
+
+        with st.spinner("Running evaluation..."):
+
+            results = evaluator.evaluate()
+
+            st.subheader("Execution Results")
+
+            result_rows = []
+
+            for result in results:
+
+                result_rows.append({
+                    "Query": result.query,
+                    "Tools Used": ", ".join(
+                        result.selected_tools
+                    ),
+                    "Response Time (s)": round(
+                        result.response_time,
+                        2
+                    ),
+                    "Parsing Failed":
+                        result.parsing_failed,
+                    "Tool Calls":
+                        len(result.selected_tools)
+                })
+
+            st.dataframe(
+                result_rows,
+                width="stretch"
+            )
+
+            st.subheader("Evaluation Metrics")
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+
+                st.metric(
+                    "Tool Selection Accuracy",
+                    f"{evaluator.correct_tool_selections(results):.1f}%"
+                )
+
+            with col2:
+
+                st.metric(
+                    "Parsing Failure Rate",
+                    f"{evaluator.parsing_failure_rate(results):.1f}%"
+                )
+
+            with col3:
+
+                st.metric(
+                    "Multi-Tool Success Rate",
+                    f"{evaluator.multi_tool_rate(results):.1f}%"
+                )
+
+            with col4:
+
+                st.metric(
+                    "Avg Response Time",
+                    f"{evaluator.avg_response_time(results):.2f}s"
+                )
 
 def main() -> None:
     """Main Streamlit application."""
@@ -122,17 +236,6 @@ def main() -> None:
         page_title="MCP/RAG Chatbot",
         layout="wide"
     )
-
-    st.title("MCP/RAG Chatbot")
-
-    st.markdown("""
-This application demonstrates:
-
-- MCP-style tool orchestration
-- Weather retrieval via Open-Meteo
-- News retrieval via RSS feeds
-- Agent-based tool selection using OpenRouter
-""")
 
     if not OPENROUTER_API_KEY:
 
@@ -150,17 +253,33 @@ Configure API key using:
 
     initialize_session_state()
 
-    render_sidebar()
+    selected_page = render_sidebar()
 
-    render_chat_history()
+    if selected_page == "Chat":
 
-    user_input = st.chat_input(
-        "Ask about weather, latest news, or anything else..."
-    )
+        st.title("MCP/RAG Chatbot")
 
-    if user_input:
+        st.markdown("""
+        This application demonstrates:
 
-        process_user_input(user_input)
+        - MCP-style tool orchestration
+        - Weather retrieval via Open-Meteo
+        - News retrieval via RSS feeds
+        - Agent-based tool selection using OpenRouter
+        """)
+
+        render_chat_history()
+
+        user_input = st.chat_input("Ask about weather, news, RAG retrieval, or disasters...")
+
+        if user_input:
+
+            process_user_input(user_input)
+
+
+    elif selected_page == "Evaluation Framework":
+
+        render_evaluation_tab()
 
 
 if __name__ == "__main__":
