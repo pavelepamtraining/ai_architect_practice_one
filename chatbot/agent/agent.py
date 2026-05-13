@@ -80,12 +80,17 @@ INSTRUCTIONS:
    <TOOL_CALL>
    {{"name": "tool_name", "arguments": {{"param": "value"}}}}
    </TOOL_CALL>
+   Do not use XML.
+   Do not use pseudo-code.
+   Do not use natural language before or after tool calls.
 4. If you don't need a tool, or after receiving tool results, provide a natural language answer
 5. Be concise and accurate
 6. Do not hallucinate information - only use data from tool results
 
 IMPORTANT:
 - Output ONLY valid JSON inside <TOOL_CALL>
+- If the user asks about historical or conceptual information, prefer the retrieve_rag_context.
+- If the user asks for latest/current/recent events, prefer the get_latest_news.
 - Do NOT include any extra text inside TOOL_CALL
 - Ensure JSON is strictly valid (double quotes, no trailing commas)
 - Only make ONE tool call at a time
@@ -104,6 +109,17 @@ IMPORTANT:
                 json_str = response[start:end].strip()
 
                 data = json.loads(json_str)
+
+                if "arguments" not in data:
+                    arguments = {
+                        k: v
+                        for k, v in data.items()
+                        if k != "name"
+                    }
+                    data = {
+                        "name": data["name"],
+                        "arguments": arguments
+                    }
                 return ToolCall(**data)
 
             # Native tool call format
@@ -114,14 +130,17 @@ IMPORTANT:
                 tool_content = tool_content.strip("[]")
                 tool_name = tool_content.split("(")[0]
                 args_part = tool_content.split("(", 1)[1].rsplit(")", 1)[0]
-                arguments = {}
-                if "=" in args_part:
+                if args_part.startswith("{"):
+                    arguments = json.loads(args_part)
+                else:
+                    arguments = {}
                     key, value = args_part.split("=", 1)
                     arguments[key.strip()] = value.strip().strip("'").strip('"')
-                    return ToolCall(
-                        name=tool_name,
-                        arguments=arguments
-                    )
+
+                return ToolCall(
+                    name=tool_name,
+                    arguments=arguments
+                )
 
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
             logger.exception(f"Failed to parse tool call: {e}")
@@ -266,6 +285,8 @@ IMPORTANT:
             response.raise_for_status()
 
             data = response.json()
+
+            logger.info(f"LLM response: {json.dumps(data, indent=2)[:200]}...")
 
             content = data["choices"][0]["message"]["content"]
 

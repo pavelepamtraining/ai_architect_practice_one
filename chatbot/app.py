@@ -56,6 +56,21 @@ Examples:
 - Latest technology news
 - Business news
 - World news
+
+#### 📚 BBC News Archive RAG Tool
+Examples:
+- Inflation effects on economy
+- Impact of climate change
+- Football championship analysis
+- Political tensions in Europe
+
+#### 🌪️ Disaster Analytics Tool
+Examples:
+- Earthquakes in Japan
+- Floods in India in 2020
+- Total deaths from hurricanes
+- How many wildfires occurred in California
+
 """)
 
         st.markdown("---")

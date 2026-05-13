@@ -8,6 +8,7 @@ import feedparser
 
 from pydantic import BaseModel, Field
 from mcp.disaster_service import DisasterDataService
+from rag.retriever import RAGRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,10 @@ class MCPServerImpl(MCPServer):
         self.disaster_service = DisasterDataService(
             csv_path="data/disasters.csv"
         )
+        self.rag_retriever = RAGRetriever(
+            index_path="rag/vector_store/index.faiss",
+            documents_path="rag/vector_store/documents.pkl"
+        )
         super().__init__("unified")
 
     def _register_tools(self) -> None:
@@ -153,6 +158,26 @@ class MCPServerImpl(MCPServer):
                         "type": "string",
                         "description": (
                             "Natural language disaster query"
+                        )
+                    }
+                },
+                "required": ["query"]
+            }
+        ))
+
+        self._add_tool(ToolSchema(
+            name="retrieve_rag_context",
+            description=(
+                "Retrieve semantic context from BBC news "
+                "knowledge base using vector similarity search."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Semantic search query"
                         )
                     }
                 },
@@ -290,3 +315,23 @@ class MCPServerImpl(MCPServer):
         query = arguments["query"]
 
         return self.disaster_service.query(query)
+
+    # ========== RAG Retriever Implementation ==========
+
+    def _execute_retrieve_rag_context(
+        self,
+        arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Retrieve semantic RAG context."""
+
+        query = arguments["query"]
+
+        documents = self.rag_retriever.retrieve(
+            query=query,
+            k=1
+        )
+
+        return {
+            "query": query,
+            "documents": documents
+        }

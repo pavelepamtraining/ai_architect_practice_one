@@ -5,3 +5,5 @@ pydantic>=2.11.0
 langgraph
 langchain-core
 pandas
+faiss-cpu
+pytest
