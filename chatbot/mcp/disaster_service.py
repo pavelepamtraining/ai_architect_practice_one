@@ -159,7 +159,7 @@ class DisasterDataService:
         # ----------------------------------------------------
 
         records = (
-            df.head(5)
+            df.head(3)
             .fillna("")
             .to_dict(orient="records")
         )
