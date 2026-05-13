@@ -12,6 +12,8 @@ from mcp.server import MCPServer, ToolSchema, ToolResult
 from memory.working_memory import WorkingMemory
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
+from dataclasses import dataclass
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,20 @@ class AgentState(TypedDict):
     messages: List[Dict[str, str]]
     tool_result: Optional[str]
     tool_call: Optional[Dict[str, Any]]
+    # ----------------------------------------------------
+    # Evaluation / observability fields
+    # ----------------------------------------------------
+    tools_used: List[str]
+    parsing_failed: bool
+    iteration_count: int
+
+@dataclass
+class AgentExecutionResult:
+    response: str
+    tools_used: list[str]
+    parsing_failed: bool
+    response_time: float
+    total_tool_calls: int
 
 class AgentOrchestrator:
     """Agent orchestrator with LLM-driven tool selection."""
@@ -144,6 +160,7 @@ IMPORTANT:
 
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
             logger.exception(f"Failed to parse tool call: {e}")
+            state["parsing_failed"] = True
 
         return None
 
@@ -172,6 +189,8 @@ IMPORTANT:
     def _reason_node(self, state: AgentState) -> AgentState:
 
         system_prompt = self._build_system_prompt()
+
+        state["iteration_count"] += 1
 
         messages = [
             {"role": "system", "content": system_prompt}
@@ -206,6 +225,10 @@ IMPORTANT:
     def _tool_node(self, state: AgentState) -> AgentState:
 
         tool_call_data = state.get("tool_call")
+
+        state["tools_used"].append(
+            tool_call.name
+        )
 
         if not tool_call_data:
             return state
@@ -301,6 +324,8 @@ IMPORTANT:
 
     def process_query(self, query: str) -> str:
 
+        start = time.time()
+
         initial_state = AgentState(
             messages=[
                 {
@@ -309,12 +334,25 @@ IMPORTANT:
                 }
             ],
             tool_result=None,
-            tool_call=None
+            tool_call=None,
+            tools_used=[],
+            parsing_failed=False,
+            iteration_count=0
         )
 
         final_state = self.graph.invoke(initial_state)
 
-        return final_state["messages"][-1]["content"]
+        response_time = (time.time() - start)
+
+        return AgentExecutionResult(
+            response=final_state["messages"][-1]["content"],
+            tools_used=final_state["tools_used"],
+            parsing_failed=final_state["parsing_failed"],
+            response_time=response_time,
+            total_tool_calls=len(
+                final_state["tools_used"]
+            )
+        )
 
     def reset(self) -> None:
         """Reset agent state."""

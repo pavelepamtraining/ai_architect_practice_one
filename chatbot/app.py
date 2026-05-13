@@ -2,6 +2,8 @@ import os
 import streamlit as st
 from agent.agent import AgentOrchestrator
 from mcp.server import MCPServerImpl
+from evaluation.evaluator import AgentEvaluator
+from evaluation.dataset import EVALUATION_DATASET
 
 
 import logging
@@ -115,11 +117,12 @@ def process_user_input(user_input: str) -> None:
 
             try:
 
-                response = st.session_state.agent.process_query(user_input)
+                result = (st.session_state.agent.process_query(user_input))
+
+                response = result.response
 
             except Exception as e:
-
-                response = f"ERROR: {str(e)}"
+                response = "We are experiencing temporary technical issues. Please try again."
 
             st.markdown(response)
 
@@ -133,44 +136,66 @@ def render_evaluation_tab() -> None:
 
     st.header("Evaluation Framework")
 
-    metrics = [
-        {
-            "metric": "Tool Selection Accuracy",
-            "description": "Percentage of requests routed to the correct MCP tool.",
-            "value": "92%"
-        },
-        {
-            "metric": "Tool Execution Success Rate",
-            "description": "Percentage of tool calls completed successfully.",
-            "value": "96%"
-        },
-        {
-            "metric": "RAG Retrieval Relevance",
-            "description": "Semantic relevance of retrieved BBC news documents.",
-            "value": "89%"
-        },
-        {
-            "metric": "Average Response Time",
-            "description": "Average end-to-end agent response latency.",
-            "value": "2.4s"
-        },
-        {
-            "metric": "Parsing Failure Rate",
-            "description": "Percentage of malformed tool-call responses.",
-            "value": "4%"
-        }
-    ]
+    st.markdown("""
+        Please note: this demo uses free-tier AI models and external services,
+        so responses may occasionally be slower than expected or temporarily unavailable due to provider/network limitations.
+    """)
 
-    for metric in metrics:
+    st.subheader("Evaluation Dataset")
 
-        st.metric(
-            label=metric["metric"],
-            value=metric["value"]
+    dataset_rows = []
+
+    for case in EVALUATION_DATASET:
+
+        dataset_rows.append({
+            "Scenario": case.name,
+            "Query": case.query,
+            "Expected Tools": ", ".join(
+                case.expected_tools
+            ),
+            "Multi Tool": case.requires_multi_tool
+        })
+
+    st.dataframe(
+        dataset_rows,
+        width="stretch"
+    )
+
+    if st.button("Run Evaluation"):
+
+        evaluator = AgentEvaluator(
+            st.session_state.agent
         )
 
-        st.caption(metric["description"])
+        with st.spinner("Running evaluation..."):
 
-        st.markdown("---")
+            results = evaluator.evaluate()
+
+            st.subheader("Execution Results")
+
+            result_rows = []
+
+            for result in results:
+
+                result_rows.append({
+                    "Query": result.query,
+                    "Tools Used": ", ".join(
+                        result.selected_tools
+                    ),
+                    "Response Time (s)": round(
+                        result.response_time,
+                        2
+                    ),
+                    "Parsing Failed":
+                        result.parsing_failed,
+                    "Tool Calls":
+                        len(result.selected_tools)
+                })
+
+            st.dataframe(
+                result_rows,
+                width="stretch"
+            )
 
 def main() -> None:
     """Main Streamlit application."""
@@ -179,17 +204,6 @@ def main() -> None:
         page_title="MCP/RAG Chatbot",
         layout="wide"
     )
-
-    st.title("MCP/RAG Chatbot")
-
-    st.markdown("""
-This application demonstrates:
-
-- MCP-style tool orchestration
-- Weather retrieval via Open-Meteo
-- News retrieval via RSS feeds
-- Agent-based tool selection using OpenRouter
-""")
 
     if not OPENROUTER_API_KEY:
 
@@ -210,6 +224,17 @@ Configure API key using:
     selected_page = render_sidebar()
 
     if selected_page == "Chat":
+
+        st.title("MCP/RAG Chatbot")
+
+        st.markdown("""
+        This application demonstrates:
+
+        - MCP-style tool orchestration
+        - Weather retrieval via Open-Meteo
+        - News retrieval via RSS feeds
+        - Agent-based tool selection using OpenRouter
+        """)
 
         render_chat_history()
 
