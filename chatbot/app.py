@@ -197,6 +197,38 @@ def render_evaluation_tab() -> None:
                 width="stretch"
             )
 
+            st.subheader("Evaluation Metrics")
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+
+                st.metric(
+                    "Tool Selection Accuracy",
+                    f"{evaluator.correct_tool_selections(results):.1f}%"
+                )
+
+            with col2:
+
+                st.metric(
+                    "Parsing Failure Rate",
+                    f"{evaluator.parsing_failure_rate(results):.1f}%"
+                )
+
+            with col3:
+
+                st.metric(
+                    "Multi-Tool Success Rate",
+                    f"{evaluator.multi_tool_rate(results):.1f}%"
+                )
+
+            with col4:
+
+                st.metric(
+                    "Avg Response Time",
+                    f"{evaluator.avg_response_time(results):.2f}s"
+                )
+
 def main() -> None:
     """Main Streamlit application."""
 

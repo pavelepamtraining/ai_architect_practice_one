@@ -21,24 +21,19 @@ class AgentEvaluator:
 
             try:
 
-                response = self.agent.process_query(
-                    case.query
+                execution_result = (
+                    self.agent.process_query(
+                        case.query
+                    )
                 )
 
-                response_lower = response.lower()
+                selected_tools = (
+                    execution_result.tools_used
+                )
 
-                selected_tools = []
-
-                for tool in [
-                    "get_current_weather",
-                    "get_latest_news",
-                    "retrieve_rag_context",
-                    "query_disaster_data"
-                ]:
-
-                    if tool in response_lower:
-
-                        selected_tools.append(tool)
+                parsing_failed = (
+                    execution_result.parsing_failed
+                )
 
             except Exception:
 
@@ -61,3 +56,89 @@ class AgentEvaluator:
             )
 
         return results
+
+    def correct_tool_selections(results):
+
+        if not results:
+            return 0
+
+        correct = 0
+
+        for case, result in zip(
+            EVALUATION_DATASET,
+            results
+        ):
+
+            expected = set(case.expected_tools)
+
+            actual = set(result.selected_tools)
+
+            if expected.issubset(actual):
+
+                correct += 1
+
+        return (
+            correct / len(results)
+        ) * 100
+
+
+    def parsing_failure_rate(results):
+
+        if not results:
+            return 0
+
+        return (
+            sum(
+                r.parsing_failed
+                for r in results
+            )
+            / len(results)
+        ) * 100
+
+
+    def multi_tool_rate(results):
+
+        multi_tool_total = sum(
+            case.requires_multi_tool
+            for case in EVALUATION_DATASET
+        )
+
+        if multi_tool_total == 0:
+            return 0
+
+        successes = 0
+
+        for case, result in zip(
+            EVALUATION_DATASET,
+            results
+        ):
+
+            expected = set(case.expected_tools)
+
+            actual = set(result.selected_tools)
+
+            if (
+                case.requires_multi_tool
+                and expected.issubset(actual)
+                and len(actual) > 1
+            ):
+
+                successes += 1
+
+        return (
+            successes / multi_tool_total
+        ) * 100
+
+
+    def avg_response_time(results):
+
+        if not results:
+            return 0
+
+        return (
+            sum(
+                r.response_time
+                for r in results
+            )
+            / len(results)
+        )
