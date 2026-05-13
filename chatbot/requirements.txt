@@ -8,5 +8,5 @@ pandas
 faiss-cpu
 sentence-transformers
 torch
-pytest
+torchvision
 pytest
