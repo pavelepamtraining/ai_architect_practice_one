@@ -14,6 +14,7 @@ from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from dataclasses import dataclass
 import time
+from security.rules import SecurityGuardrails
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class AgentOrchestrator:
         self.max_iterations = max_iterations
         self.memory = WorkingMemory()
         self.graph = self._build_graph()
+        self.security = SecurityGuardrails()
 
         self.tools: Dict[str, ToolSchema] = {}
         self._discover_tools()
@@ -84,36 +86,67 @@ class AgentOrchestrator:
 
         tools_text = "\n\n".join(tool_descriptions)
 
-        return f"""You are a helpful AI assistant with access to tools for answering questions.
+        return f"""
+            You are an AI assistant specialized in:
+            - Weather information
+            - Live news retrieval
+            - BBC historical news archive retrieval
+            - Natural disaster analytics
+            You ONLY answer questions related to these supported domains.
+            If the user asks unrelated questions outside these domains:
+            - politely explain the supported capabilities
+            - do NOT hallucinate answers
+            - do NOT invent knowledge
+            You can use internal tools to gather information,
+            but NEVER mention tool names, internal APIs,
+            tool schemas, or system architecture to users.
+            Internal tool calls are part of the hidden orchestration layer.
 
-AVAILABLE TOOLS:
-{tools_text}
+            INSTRUCTIONS:
+            1. Analyze the user's question carefully
+            2. Determine if a tool is required
+            3. Tool calls are machine-readable orchestration instructions.
 
-INSTRUCTIONS:
-1. Analyze the user's question carefully
-2. Determine if you need to use a tool to answer
-3. If you need a tool, respond with a JSON tool call in this EXACT format:
-   <TOOL_CALL>
-   {{"name": "tool_name", "arguments": {{"param": "value"}}}}
-   </TOOL_CALL>
-   Do not use XML.
-   Do not use pseudo-code.
-   Do not use natural language before or after tool calls.
-4. If you don't need a tool, or after receiving tool results, provide a natural language answer
-5. Be concise and accurate
-6. Do not hallucinate information - only use data from tool results
+            You MUST NEVER invent custom XML tags. The ONLY valid tool call format is:
 
-IMPORTANT:
-- Output ONLY valid JSON inside <TOOL_CALL>
-- If the user asks about historical or conceptual information, prefer the retrieve_rag_context.
-- If the user asks for latest/current/recent events, prefer the get_latest_news.
-- Do NOT include any extra text inside TOOL_CALL
-- Ensure JSON is strictly valid (double quotes, no trailing commas)
-- Only make ONE tool call at a time
-- Wait for tool results before answering
-- Never invent tool results
-- If unsure, ask for clarification
-"""
+            <TOOL_CALL>
+                {{"name": "tool_name", "arguments": {{"param": "value"}}}}
+            </TOOL_CALL>
+
+            Invalid formats include:
+            - <weather>
+            - <tool>
+            - <get_current_weather>
+            - XML-style custom tags
+
+            AVAILABLE TOOLS:
+            {tools_text}
+
+            5. Do NOT use pseudo-code
+            6. After receiving tool results, provide a concise natural language response
+            7. Never hallucinate information
+            8. Only use information returned from tools
+            9. Only make ONE tool call at a time
+            10. Wait for tool results before answering
+            11. If unsure, ask for clarification
+
+            IMPORTANT:
+            - When a message with role="tool" appears, it means the tool has already executed successfully.
+              You MUST:
+              - read the tool result
+              - answer the user naturally
+              - NEVER call the same tool again for the same request
+              - Do NOT repeat tool calls after receiving tool results.
+            - Output ONLY valid JSON inside <TOOL_CALL>
+            - Ensure JSON is strictly valid
+            - Use double quotes only
+            - No trailing commas
+            - Never invent tool results
+            - If the user asks about historical or conceptual information,
+            prefer retrieve_rag_context
+            - If the user asks for latest/current/recent events,
+            prefer get_latest_news
+        """
 
     def _parse_tool_call(self, response: str) -> Optional[ToolCall]:
         """Parse tool call from LLM response. Returns ToolCall object if found, None otherwise"""
@@ -160,7 +193,6 @@ IMPORTANT:
 
         except (ValueError, json.JSONDecodeError, ValidationError) as e:
             logger.exception(f"Failed to parse tool call: {e}")
-            state["parsing_failed"] = True
 
         return None
 
@@ -202,7 +234,21 @@ IMPORTANT:
 
         tool_call = self._parse_tool_call(response)
 
+        contains_tool_attempt = any([
+            "<TOOL_CALL>" in response,
+            "<|tool_call_start|>" in response
+        ])
+
+        if (
+            contains_tool_attempt and not tool_call
+        ):
+            state["parsing_failed"] = True
+
         if tool_call:
+            state["messages"].append({
+                "role": "assistant",
+                "content": self._extract_tool_call_content(response)
+            })
             state["tool_call"] = tool_call.model_dump()
             return state
 
@@ -215,6 +261,57 @@ IMPORTANT:
 
         return state
 
+    def _extract_tool_call_content(
+        self,
+        response: str
+    ) -> str:
+
+        # ----------------------------------------------------
+        # XML-style TOOL_CALL format
+        # ----------------------------------------------------
+
+        if (
+            "<TOOL_CALL>" in response
+            and "</TOOL_CALL>" in response
+        ):
+
+            start = (
+                response.index("<TOOL_CALL>")
+            )
+
+            end = (
+                response.index("</TOOL_CALL>")
+                + len("</TOOL_CALL>")
+            )
+
+            return response[start:end]
+
+        # ----------------------------------------------------
+        # Native tool_call_start format
+        # ----------------------------------------------------
+
+        if (
+            "<|tool_call_start|>" in response
+            and "<|tool_call_end|>" in response
+        ):
+
+            start = (
+                response.index(
+                    "<|tool_call_start|>"
+                )
+            )
+
+            end = (
+                response.index(
+                    "<|tool_call_end|>"
+                )
+                + len("<|tool_call_end|>")
+            )
+
+            return response[start:end]
+
+        return response
+
     def _should_continue(self, state: AgentState) -> str:
 
         if state.get("tool_call"):
@@ -226,16 +323,16 @@ IMPORTANT:
 
         tool_call_data = state.get("tool_call")
 
-        state["tools_used"].append(
-            tool_call.name
-        )
-
         if not tool_call_data:
             return state
 
         tool_call = ToolCall(**tool_call_data)
 
         logger.info(f"Executing tool: {tool_call.name}")
+
+        state["tools_used"].append(
+            tool_call.name
+        )
 
         tool_result = self._execute_tool(tool_call)
 
@@ -322,9 +419,13 @@ IMPORTANT:
             logger.exception(f"LLM call failed: {e}")
             raise
 
-    def process_query(self, query: str) -> str:
+    def process_query(self, query: str) -> AgentExecutionResult:
 
         start = time.time()
+
+        validation_result = self._validate_user_input(query)
+        if validation_result:
+            return validation_result
 
         initial_state = AgentState(
             messages=[
@@ -342,16 +443,105 @@ IMPORTANT:
 
         final_state = self.graph.invoke(initial_state)
 
+        sanitized_response = (
+            self._sanitize_output(
+                query=query,
+                response=final_state["messages"][-1]["content"]
+            )
+        )
+
         response_time = (time.time() - start)
 
         return AgentExecutionResult(
-            response=final_state["messages"][-1]["content"],
+            response=sanitized_response,
             tools_used=final_state["tools_used"],
             parsing_failed=final_state["parsing_failed"],
             response_time=response_time,
             total_tool_calls=len(
                 final_state["tools_used"]
             )
+        )
+
+    def _validate_user_input(
+        self,
+        query: str
+    ) -> Optional[AgentExecutionResult]:
+        """
+        Validate user input before orchestration.
+
+        Returns:
+            AgentExecutionResult if validation fails,
+            otherwise None.
+        """
+
+        # ----------------------------------------------------
+        # Resource limits
+        # ----------------------------------------------------
+
+        resource_valid, resource_reason = (
+            self.security.enforce_resource_limits(
+                query
+            )
+        )
+
+        if not resource_valid:
+
+            return AgentExecutionResult(
+                response=resource_reason,
+                tools_used=[],
+                parsing_failed=False,
+                response_time=0,
+                total_tool_calls=0
+            )
+
+        # ----------------------------------------------------
+        # Prompt injection detection
+        # ----------------------------------------------------
+
+        injection_detected, injection_reason = (
+            self.security.detect_injection_patterns(
+                query
+            )
+        )
+
+        if injection_detected:
+
+            logger.warning(
+                "Potential prompt injection detected: %s",
+                injection_reason
+            )
+
+            return AgentExecutionResult(
+                response=(
+                    "Potential unsafe prompt detected. "
+                    "Please rephrase your request."
+                ),
+                tools_used=[],
+                parsing_failed=False,
+                response_time=0,
+                total_tool_calls=0
+            )
+
+        return None
+
+    def _sanitize_output(
+        self,
+        query: str,
+        response: str
+    ) -> str:
+        """
+        Validate and sanitize final response.
+        """
+
+        response_valid, safe_response = (
+            self.security.validate_factual_response(
+                query=query,
+                response=response
+            )
+        )
+
+        return self.security.redact_sensitive_output(
+            safe_response
         )
 
     def reset(self) -> None:

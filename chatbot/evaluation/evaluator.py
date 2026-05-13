@@ -57,7 +57,7 @@ class AgentEvaluator:
 
         return results
 
-    def correct_tool_selections(results):
+    def correct_tool_selections(self, results):
 
         if not results:
             return 0
@@ -82,7 +82,7 @@ class AgentEvaluator:
         ) * 100
 
 
-    def parsing_failure_rate(results):
+    def parsing_failure_rate(self, results):
 
         if not results:
             return 0
@@ -96,7 +96,7 @@ class AgentEvaluator:
         ) * 100
 
 
-    def multi_tool_rate(results):
+    def multi_tool_rate(self, results):
 
         multi_tool_total = sum(
             case.requires_multi_tool
@@ -130,7 +130,7 @@ class AgentEvaluator:
         ) * 100
 
 
-    def avg_response_time(results):
+    def avg_response_time(self, results):
 
         if not results:
             return 0
