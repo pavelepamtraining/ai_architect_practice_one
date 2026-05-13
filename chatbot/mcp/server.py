@@ -98,8 +98,14 @@ class MCPServerImpl(MCPServer):
     }
 
     def __init__(self):
+        base_dir = Path(__file__).resolve().parent.parent
+
+        csv_path = (
+            base_dir / "data" / "disasters.csv"
+        )
+
         self.disaster_service = DisasterDataService(
-            csv_path="data/disasters.csv"
+            csv_path=str(csv_path)
         )
         self.rag_retriever = RAGRetriever(
             index_path="rag/vector_store/index.faiss",
