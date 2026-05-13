@@ -6,4 +6,7 @@ langgraph
 langchain-core
 pandas
 faiss-cpu
+sentence-transformers
+torch
+pytest
 pytest
