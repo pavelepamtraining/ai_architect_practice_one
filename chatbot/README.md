@@ -165,6 +165,22 @@ The framework executes predefined evaluation scenarios against the full orchestr
 
 ![evaluation_result_with_mistral.png](evaluation_result_with_mistral.png)
 
+### Testability
+
+The project intentionally emphasizes testability and measurable orchestration quality.
+
+Unlike traditional deterministic applications, LLM-based systems introduce:
+
+- non-deterministic outputs
+- unstable formatting
+- orchestration variability
+- model-dependent behavior
+
+To address this, the architecture includes both:
+
+- automated evaluation metrics
+- isolated unit testing
+
 ### Key Findings
 
 - Open models frequently produce malformed tool calls

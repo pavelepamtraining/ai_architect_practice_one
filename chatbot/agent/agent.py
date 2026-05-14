@@ -31,6 +31,7 @@ class ToolCall(BaseModel):
     arguments: Dict[str, Any]
 
 class AgentState(TypedDict):
+    """ Agent state """
     messages: List[Dict[str, str]]
     tool_result: Optional[str]
     tool_call: Optional[Dict[str, Any]]
@@ -43,6 +44,7 @@ class AgentState(TypedDict):
 
 @dataclass
 class AgentExecutionResult:
+    """ Agent execution result """
     response: str
     tools_used: list[str]
     parsing_failed: bool
@@ -197,7 +199,7 @@ class AgentOrchestrator:
         return None
 
     def _build_graph(self):
-
+        """Construct LangGraph workflow defining reasoning and tool-execution transitions."""
         workflow = StateGraph(AgentState)
 
         workflow.add_node("reason", self._reason_node)
@@ -219,7 +221,7 @@ class AgentOrchestrator:
         return workflow.compile()
 
     def _reason_node(self, state: AgentState) -> AgentState:
-
+        """Execute LLM reasoning step and detect whether tool invocation is required."""
         system_prompt = self._build_system_prompt()
 
         state["iteration_count"] += 1
@@ -265,6 +267,7 @@ class AgentOrchestrator:
         self,
         response: str
     ) -> str:
+        """Extract normalized tool-call segment from model response across supported formats."""
 
         # ----------------------------------------------------
         # XML-style TOOL_CALL format
@@ -313,13 +316,14 @@ class AgentOrchestrator:
         return response
 
     def _should_continue(self, state: AgentState) -> str:
-
+        """Determine whether orchestration should continue with tool execution or terminate."""
         if state.get("tool_call"):
             return "tool"
 
         return "end"
 
     def _tool_node(self, state: AgentState) -> AgentState:
+        """Execute requested tool and append structured tool result into conversational state."""
 
         tool_call_data = state.get("tool_call")
 
