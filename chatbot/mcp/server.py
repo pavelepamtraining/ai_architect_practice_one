@@ -128,7 +128,7 @@ class MCPServerImpl(MCPServer):
         super().__init__("unified")
 
     def _register_tools(self) -> None:
-        """Register all tools (weather + news)."""
+        """Register all tools."""
         self._add_tool(ToolSchema(
             name="get_current_weather",
             description="Get current weather conditions for a specific location. Returns temperature, conditions, wind speed, and humidity.",
