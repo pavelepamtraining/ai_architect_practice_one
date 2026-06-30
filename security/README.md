@@ -94,8 +94,14 @@ Two versions of the agent are provided, users can:
 - Secure agent: Significant risk reduction through layered defenses
 - Residual risks: Sophisticated attacks and edge cases remain possible
 
-![img.png](why.png)
+https://streamlit.io/
+https://aiarchitectpracticeone-einkerdsjdns8pxbwwdww9.streamlit.app/
+https://www.f5.com/resources/reference-architectures/ai-overview#architecture
+https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/
+https://docs.litellm.ai/
+https://github.com/BerriAI/litellm
 
+![img.png](why.png)
 ![img_1.png](img_1.png)
 ![a2e42356-9a46-4658-8155-5bb5fae1351a.png](a2e42356-9a46-4658-8155-5bb5fae1351a.png)
 ![c35790f6-5892-4dd7-bda0-6f1968c6e1d9.png](c35790f6-5892-4dd7-bda0-6f1968c6e1d9.png)
