@@ -1,6 +1,7 @@
 # LLM Security Demo - Streamlit App
 
-Interactive web application demonstrating OWASP LLM vulnerabilities and mitigations using OpenRouter API.
+Interactive web application demonstrating OWASP 
+LLM vulnerabilities and mitigations using OpenRouter API.
 
 ## Quick Start
 
@@ -92,3 +93,17 @@ Two versions of the agent are provided, users can:
 - Vulnerable agent: High attack success rate across all categories
 - Secure agent: Significant risk reduction through layered defenses
 - Residual risks: Sophisticated attacks and edge cases remain possible
+
+![img.png](why.png)
+
+![img_1.png](img_1.png)
+![a2e42356-9a46-4658-8155-5bb5fae1351a.png](a2e42356-9a46-4658-8155-5bb5fae1351a.png)
+![c35790f6-5892-4dd7-bda0-6f1968c6e1d9.png](c35790f6-5892-4dd7-bda0-6f1968c6e1d9.png)
+![d22ad2db-c03b-401f-8b15-5f4eb97543af.png](d22ad2db-c03b-401f-8b15-5f4eb97543af.png)
+![1c924c28-9299-43db-a6e6-3cb5a949cdb2.png](1c924c28-9299-43db-a6e6-3cb5a949cdb2.png)
+![b2524700-5454-4f2d-bb53-c4340d283c8f.png](b2524700-5454-4f2d-bb53-c4340d283c8f.png)
+![f4944cbc-57e0-4bec-aad8-3cfe9f18de0d.png](f4944cbc-57e0-4bec-aad8-3cfe9f18de0d.png)
+![6968475b-5155-4753-8146-130d811290f9.png](6968475b-5155-4753-8146-130d811290f9.png)
+![fcfc8588-89e6-4625-bd96-d8e288eee946.png](fcfc8588-89e6-4625-bd96-d8e288eee946.png)
+![cd3957b4-759d-454f-87f7-724adb3f9a50.png](cd3957b4-759d-454f-87f7-724adb3f9a50.png)
+![90dd605a-caca-4323-8dd8-79341350e77c.png](90dd605a-caca-4323-8dd8-79341350e77c.png)
